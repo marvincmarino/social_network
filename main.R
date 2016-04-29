@@ -28,11 +28,15 @@ nodes = as.data.frame(listNames)
 links = data[, c("name1", "name2", "date", "place")]
 
 
-#### Network plots ####
+#### Network plots & general stats ####
 library(igraph)
 
 # init graph object
 net = graph.data.frame(links, directed = T, vertices = nodes)
+
+# general network stats
+diameter(net)
+farthest.nodes(net)
 
 # type 0: plain vanilla
 plot(net)
@@ -64,7 +68,7 @@ V(net.bg)$size = 2
 V(net.bg)$label.cex=0.8
 E(net.bg)$arrow.mode = 0
 
-# select one layout "l"
+# select one layout l
 l = layout.circle(net.bg)
 l = layout.kamada.kawai(net.bg)
 l = layout.fruchterman.reingold(net.bg)
@@ -115,7 +119,7 @@ net.bg = simplify(net.bg, remove.multiple = T, remove.loops = T) # remove double
 V(net.bg)$frame.color = "white"
 V(net.bg)$color = "orange"
 V(net.bg)$label = "" 
-V(net.bg)$size = deg*2
+V(net.bg)$size = deg*2 # weighting the size per degree
 V(net.bg)$label.cex=0.8
 E(net.bg)$arrow.mode = 0
 l = layout.fruchterman.reingold(net.bg)
@@ -126,10 +130,12 @@ plot(net.bg, vertex.label=V(net.bg)$name,
      main="Media-Saturn Account Lunch Date Network", sub = "Bubble size is directly proportional to number of links.")
 
 
-#### (TEST) Network analytics: 1.2 Are there communities? ####
+#### Network analytics: 1.2 Are there communities? ####
 
 # define network
 net.bg = simplify(net.bg, remove.multiple = T, remove.loops = T) # simplify
+
+# ***************************************************************************
 
 ## TRY 1 - NOT WORKING
 
@@ -146,15 +152,18 @@ l = layout.fruchterman.reingold(net.bg)
 # plot
 plot(net.bg, vertex.color=colrs[V(net.bg)$community])
 
-## TRY 2 - use walktrap algo
+# ***************************************************************************
 
-walktrapComm = walktrap.community(net.bg); walktrapComm
+## TRY 2 - use walktrap algo / OK
 
-V(net.bg)$membership = walktrapComm$membership
+walktrapComm = walktrap.community(net.bg); walktrapComm # lauch algo
 
+colors = rainbow(max(membership(walktrapComm))) # generate colors = n communities
 
-
-
+# plot
+plot(net.bg,vertex.color=colors[membership(walktrapComm)], 
+     layout=layout.fruchterman.reingold, 
+     edge.arrow.mode = 0, main = "Communities Identification using WalkTrap Algo")
 
 
 
@@ -187,7 +196,7 @@ qq = q + geom_bar(stat = "identity")
 qq + theme(axis.text.x = element_text(angle=90, hjust=1)) + coord_flip()
 
 
-#### Time series analysis: Lunch dates ####
+#### (DEV) Time series analysis: Lunch dates ####
 
 # table lunches per day - method 1
 lunchesPerDay = data.frame(table(data$date)); lunchesPerDay
@@ -227,7 +236,6 @@ plot(lunches_model.es)
 
 
 
-#### (TEST): Network stats####
 
-diameter(net.bg)
-farthest.nodes(net.bg)
+
+
