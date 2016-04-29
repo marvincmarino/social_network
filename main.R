@@ -5,6 +5,7 @@ data = read.csv("./data.csv", header = TRUE, sep = ";", stringsAsFactors = FALSE
 col_names = c("createdBy","name1","name2","date","place","itemType","path")
 colnames(data) = col_names; colnames(data)
 
+
 #### Data prep ####
 
 # Need to create links and nodes objects, where:
@@ -26,11 +27,14 @@ nodes = as.data.frame(listNames)
 # links
 links = data[, c("name1", "name2", "date", "place")]
 
-#### Plot the network ####
+
+#### Network plots ####
 library(igraph)
 
-# type 0: plain vanilla
+# init graph object
 net = graph.data.frame(links, directed = T, vertices = nodes)
+
+# type 0: plain vanilla
 plot(net)
 
 # improve dataviz: some plot for tests
@@ -42,7 +46,7 @@ plot(net, edge.arrow.size=.2, edge.color="orange",
      main="Network",
      vertex.size=0.1, vertex.label.cex=0.8) 
 
-# type 2
+# type 2 - grey style
 plot(net, vertex.shape="none", vertex.label=V(net)$nodesName, 
      vertex.label.font=2, vertex.label.color="gray40",
      vertex.label.cex=.7, edge.color="gray85")
@@ -52,10 +56,11 @@ net.bg = net
 
 net.bg = simplify(net.bg, remove.multiple = T, remove.loops = T) # simplify
 
+# edit parameters
 V(net.bg)$frame.color = "white"
 V(net.bg)$color = "orange"
 V(net.bg)$label = "" 
-V(net.bg)$size = 0.1
+V(net.bg)$size = 2
 V(net.bg)$label.cex=0.8
 E(net.bg)$arrow.mode = 0
 
@@ -66,7 +71,7 @@ l = layout.fruchterman.reingold(net.bg)
 
 # plot
 plot(net.bg, vertex.label=V(net.bg)$name, 
-     rescale=T, layout=l)
+     rescale=T, layout=l,  main="Media-Saturn Account Lunch Date Network")
 
 # plot(net.bg, vertex.label=V(net.bg)$name)
 
@@ -85,15 +90,84 @@ plot(net, layout=l,
      edge.width=0.5)
 
 
+#### Network analytics: 1.1 Who is the most connected? ####
+
+# Questions:
+# who is the most connected?
+
+# compute node degrees
+deg = degree(net, mode="all"); deg
+degTable = as.data.frame(deg)
+
+degTable$names = rownames(degTable); head(degTable)
+
+# hist
+library(ggplot2)
+q = ggplot(degTable, aes(names, deg))
+qq = q + geom_bar(stat = "identity")
+qq + theme(axis.text.x = element_text(angle=90, hjust=1)) + coord_flip() + ggtitle("Who is the most connected?") + theme(plot.title = element_text(lineheight=.8, face="bold"))
+
+# network graph weighted per degrees
+net.bg = net
+
+net.bg = simplify(net.bg, remove.multiple = T, remove.loops = T) # remove double connections
+
+V(net.bg)$frame.color = "white"
+V(net.bg)$color = "orange"
+V(net.bg)$label = "" 
+V(net.bg)$size = deg*2
+V(net.bg)$label.cex=0.8
+E(net.bg)$arrow.mode = 0
+l = layout.fruchterman.reingold(net.bg)
+
+# plot
+plot(net.bg, vertex.label=V(net.bg)$name, 
+     rescale=T, layout=l,  
+     main="Media-Saturn Account Lunch Date Network", sub = "Bubble size is directly proportional to number of links.")
+
+
+#### (TEST) Network analytics: 1.2 Are there communities? ####
+
+# define network
+net.bg = simplify(net.bg, remove.multiple = T, remove.loops = T) # simplify
+
+## TRY 1 - NOT WORKING
+
+# detect communities
+V(net.bg)$community = optimal.community(net.bg)$membership
+colrs = adjustcolor( c("gray50", "tomato", "gold", "yellowgreen"), alpha=.6)
+
+# plot param
+V(net.bg)$label = "" 
+V(net.bg)$label.cex=0.8
+E(net.bg)$arrow.mode = 0
+l = layout.fruchterman.reingold(net.bg)
+
+# plot
+plot(net.bg, vertex.color=colrs[V(net.bg)$community])
+
+## TRY 2 - use walktrap algo
+
+walktrapComm = walktrap.community(net.bg); walktrapComm
+
+V(net.bg)$membership = walktrapComm$membership
+
+
+
+
+
+
+
+
 #### Places analysis: Where people go to eat? ####
 
-# need to calculate the place frequencies
+# calculate place frequencies
 library(plyr)
 places = count(links, 'place')
 
 # wordcloud
 library(wordcloud)
-wordcloud(places$place, places$freq, random.order=FALSE, colors=brewer.pal(8, "Dark2"), max.words=100)
+wordcloud(places$place, places$freq, random.order=FALSE, colors=brewer.pal(8, "Dark2"), main="Where Accenture goes mostly to eat?")
 
 # ggplot
 library(ggplot2)
@@ -103,7 +177,57 @@ qq + theme(axis.text.x = element_text(angle=90, hjust=1)) + coord_flip()
 
 
 #### Engagement: Who created more records? ####
+
+# count
 createdCount = count(data, 'createdBy')
+
+# plot
 q = ggplot(createdCount, aes(createdBy, freq))
 qq = q + geom_bar(stat = "identity")
 qq + theme(axis.text.x = element_text(angle=90, hjust=1)) + coord_flip()
+
+
+#### Time series analysis: Lunch dates ####
+
+# table lunches per day - method 1
+lunchesPerDay = data.frame(table(data$date)); lunchesPerDay
+
+# table lunches per day - method 2
+library(plyr)
+lunchesPerDay_2 = count(data, 'date')
+
+# time series
+library("TTR")
+lunches_ts = ts(lunchesPerDay)
+plot.ts(lunches_ts,  main = "lunch dates time series")
+
+# (1) ARIMA forecast
+library("forecast")
+
+# differentiate ts and auto.arima
+lunches_ts.diff1 = diff(lunches_ts, differences=1)
+auto.arima(lunches_ts.diff1)
+
+# correlograms
+par(mfrow = c(2, 1))
+acf(lunches_ts.diff1, lag.max=20) # plot 
+pacf(lunches_ts.diff1, lag.max=20) # plot 
+
+# fit model
+lunches_model.ar = arima(lunches_ts.diff1, order=c(1,0,0))
+
+# apply model
+lunches_prediction = forecast.Arima(lunches_model.ar, h = 5); lunches_prediction
+par(mfrow = c(1, 1))
+plot.forecast(lunches_prediction)
+
+# (2) Exp smoothing
+lunches_model.es = HoltWinters(lunches_ts, beta=F, gamma=F); lunches_model.es
+plot(lunches_model.es)
+
+
+
+#### (TEST): Network stats####
+
+diameter(net.bg)
+farthest.nodes(net.bg)
